@@ -122,6 +122,9 @@ async def calculate_price(message: types.Message, state: FSMContext):
     except Exception:
         pass
 
+@dp.message(F.text == "ОФОРМИТЬ ЗАКАЗ🛍")
+async def make_order(message: types.Message):
+    await ()
 
 async def main():
     await dp.start_polling(bot)
