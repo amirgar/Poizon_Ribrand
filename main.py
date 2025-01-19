@@ -1,15 +1,15 @@
 import logging
-from sys import path_hooks
-
+from random import randint
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types.input_file import FSInputFile
+
 from config import TOKEN, CHANNEL_ID
 import asyncio
 import os
-from valute_translator import get_course_cny, get_course_rub
+from valute_translator import get_course_rub
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
@@ -29,24 +29,35 @@ class Ruble(StatesGroup):
     calculate_price = State()
 
 
+class Certificate(StatesGroup):
+    name = State()
+    phone_number = State()
+    price = State()
+
+
 class Order(StatesGroup):
     scrin = State()
     link = State()
     price = State()
     adress = State()
     name = State()
+    size = State()
     phone_number = State()
     ready = State()
 
 
 KEYBOARD_START = [
     [types.KeyboardButton(text="ОФОРМИТЬ ЗАКАЗ🛍"), types.KeyboardButton(text="СОЗДАТЬ СЕРТИФИКАТ🎁")],
-    [types.KeyboardButton(text="ПЕРЕВЕСТИ ЮАНИ В РУБЛИ💴"), types.KeyboardButton(text="ПЕРЕВЕСТИ РУБЛИ В ЮАНИ💴")],
-    [types.KeyboardButton(text="НАЦЕНКА ЗА ДОСТАВКУ🚚")],
+    [types.KeyboardButton(text="ПЕРЕВЕСТИ ЮАНИ В РУБЛИ💴")],
 ]
 
 KEYBOARD_BACK = [
     [types.KeyboardButton(text="ВЕРНУТЬСЯ ОБРАТНО⬅️")],
+]
+
+KEYBOARD_PRICES = [
+    [types.KeyboardButton(text="1000₽"), types.KeyboardButton(text="2500₽"), types.KeyboardButton(text="4000₽")],
+    [types.KeyboardButton(text="5000₽"), types.KeyboardButton(text="7500₽"), types.KeyboardButton(text="10000₽")]
 ]
 
 
@@ -91,7 +102,7 @@ async def calculate_price_start(message: types.Message, state: FSMContext):
         keyboard=KEYBOARD_BACK,
         resize_keyboard=True
     )
-    await message.answer('Введите цену товара в рублях, я переведу Вам в юани', reply_markup=keyboard)
+    await message.answer('Введите цену товара в юанях, я переведу Вам в рубли', reply_markup=keyboard)
     await state.set_state(Uyan.calculate_price)
 
 
@@ -104,36 +115,9 @@ async def calculate_price(message: types.Message, state: FSMContext):
     try:
         price = int(message.text)
         print(price)
-        new_price = get_course_cny(price)
-        print(new_price)
-        await message.answer(f"{price} RUB = {new_price} CNY", reply_markup=keyboard)
-        await state.clear()  # Очистить состояние после обработки
-    except Exception:
-        pass
-
-
-@dp.message(F.text == "ПЕРЕВЕСТИ РУБЛИ В ЮАНИ💴")
-async def calculate_price_start(message: types.Message, state: FSMContext):
-    keyboard = types.ReplyKeyboardMarkup(
-        keyboard=KEYBOARD_BACK,
-        resize_keyboard=True
-    )
-    await message.answer('Введите цену товара в рублях, я переведу Вам в юани', reply_markup=keyboard)
-    await state.set_state(Ruble.calculate_price)
-
-
-@dp.message(Ruble.calculate_price)
-async def calculate_price(message: types.Message, state: FSMContext):
-    keyboard = types.ReplyKeyboardMarkup(
-        keyboard=KEYBOARD_BACK,
-        resize_keyboard=True
-    )
-    try:
-        price = int(message.text)
-        # print(price)
         new_price = get_course_rub(price)
-        # print(new_price)
-        await message.answer(f"{price} RUB = {new_price} CNY", reply_markup=keyboard)
+        print(new_price)
+        await message.answer(f"{price}¥ = {new_price}₽", reply_markup=keyboard)
         await state.clear()  # Очистить состояние после обработки
     except Exception:
         pass
@@ -154,7 +138,12 @@ async def make_order(message: types.Message, state: FSMContext):
         os.mkdir(f"users/{id}")
     except Exception:
         pass
-
+    photo = FSInputFile(f'warning_first.jpg.', filename=os.path.basename("warning_first.jpg"))
+    await bot.send_photo(message.chat.id, photo=photo)
+    photo = FSInputFile(f'warning_second.jpg', filename=os.path.basename("warning_second.jpg"))
+    await bot.send_photo(message.chat.id, photo=photo)
+    await bot.send_message(message.chat.id,
+                           "❗ Мы не принимаем заказы с товарами с таким знаком, как на первом фото. Также принимаем только те заказы, кнопки которых подсвечиваются только голубым и черным ❗")
     photo = FSInputFile(f'example_scrin.jpg', filename=os.path.basename("example_scrin.jpg"))
     await bot.send_photo(message.chat.id, photo=photo)
     await bot.send_message(message.chat.id, "Пожалуйста, вставьте фото товара, как показано на примере 🙌",
@@ -224,6 +213,23 @@ async def make_order(message: types.Message, state: FSMContext):
             file.write(f"ФИО: {message.text}\n")
     except Exception:
         pass
+    await bot.send_message(message.chat.id,
+                           "Если необходимо, то выберите размер товара (например: обуви). Если данная информация не нужна, поставьте прочерк",
+                           reply_markup=keyboard)
+    await state.set_state(Order.size)
+
+
+@dp.message(Order.size)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/order.txt', "a") as file:
+            file.write(f"Размер: {message.text}\n")
+    except Exception:
+        pass
     await bot.send_message(message.chat.id, "Введите ваш номер телефона 📱",
                            reply_markup=keyboard)
     await state.set_state(Order.phone_number)
@@ -254,7 +260,84 @@ async def make_order(message: types.Message, state: FSMContext):
     await bot.send_message(message.chat.id, order_text)
 
     await bot.send_message(message.chat.id,
-                           "Ваша заявка сформирована и отправлена! Чтобы вернуться назад, нажмите на кнопку ниже",
+                           "Ваша заявка сформирована и отправлена! Скоро с Вами свяжется наш менеджер. Чтобы вернуться назад, нажмите на кнопку ниже",
+                           reply_markup=keyboard)
+    await state.clear()
+
+
+"""
+@dp.message(F.text == "НАЦЕНКА ЗА ДОСТАВКУ🚚")
+async def price_order(message: types.message):
+    with open("price_orders.txt", "r", encoding="UTF-8") as file:
+        await bot.send_message(message.chat.id, file.read())
+"""
+
+
+@dp.message(F.text == "СОЗДАТЬ СЕРТИФИКАТ🎁")
+async def certificate_order(message: types.message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_PRICES,
+        resize_keyboard=True
+    )
+    with open("certificate_order", 'r', encoding="UTF-8") as file:
+        await bot.send_message(message.chat.id, file.read())
+    await bot.send_message(message.chat.id, "Выберите сумму сертификата 💵", reply_markup=keyboard)
+    await state.set_state(Certificate.price)
+
+
+@dp.message(Certificate.price)
+async def certiicate_order(message: types.message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    with open(f'users/{message.chat.id}/certificate.txt', "w", encoding="UTF-8") as file:
+        file.truncate(0)
+    with open(f'users/{message.chat.id}/certificate.txt', "a", encoding="UTF-8") as file:
+        file.write(f"Summ certificate: {message.text[:-1]}\n")
+    await bot.send_message(message.chat.id, "Введите ФИО, на него будет оформлен сертификат", reply_markup=keyboard)
+    await state.set_state(Certificate.name)
+
+
+@dp.message(Certificate.name)
+async def certiicate_order(message: types.message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/certificate.txt', "a") as file:
+            file.write(f"ФИО оформляющего: {message.text}\n")
+    except Exception:
+        pass
+    await bot.send_message(message.chat.id, "Введите Ваш номер телефона", reply_markup=keyboard)
+    await state.set_state(Certificate.phone_number)
+
+
+@dp.message(Certificate.phone_number)
+async def certiicate_order(message: types.message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    code = randint(1000000, 10000000)
+    try:
+        with open(f'users/{message.chat.id}/certificate.txt', "a") as file:
+            file.write(f"Номер телефона: {message.text}\n")
+            file.write(f"Код серификата: {code}\n")
+            file.write(f"Тг покупателя: @{message.from_user.username}\n")
+    except Exception:
+        pass
+    try:
+        with open(f'users/{message.chat.id}/certificate.txt', 'r') as file:
+            order_text = file.read()
+        await bot.send_message(CHANNEL_ID, f'СЕРТИФИКАТ\n{order_text}')
+        await bot.send_message(message.chat.id,
+                               f'{order_text}✅ Заявка на создание сертификата подана! Скоро с Вами свяжется менеджер для оплаты')
+    except Exception:
+        pass
+    await bot.send_message(message.chat.id,
+                           "❗ВАЖНО❗\nЗапомните код сертификата, без него мы не сможем выдать сертификат получателю!",
                            reply_markup=keyboard)
     await state.clear()
 
