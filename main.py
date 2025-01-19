@@ -1,4 +1,6 @@
 import logging
+from sys import path_hooks
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -13,6 +15,11 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+try:
+    os.mkdir("users")
+except Exception:
+    pass
+
 
 class Uyan(StatesGroup):
     calculate_price = State()
@@ -20,6 +27,16 @@ class Uyan(StatesGroup):
 
 class Ruble(StatesGroup):
     calculate_price = State()
+
+
+class Order(StatesGroup):
+    scrin = State()
+    link = State()
+    price = State()
+    adress = State()
+    name = State()
+    phone_number = State()
+    ready = State()
 
 
 KEYBOARD_START = [
@@ -52,7 +69,7 @@ async def start_message(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(
         keyboard=KEYBOARD_START,
         resize_keyboard=True,
-        input_field_placeholder="Нажмите на необходимую кнопку"
+        input_field_placeholder="Выберите кнопку"
     )
     photo = FSInputFile("logo.png", filename=os.path.basename("logo.png"))
     await bot.send_photo(message.chat.id, photo=photo)
@@ -122,9 +139,111 @@ async def calculate_price(message: types.Message, state: FSMContext):
     except Exception:
         pass
 
+
 @dp.message(F.text == "ОФОРМИТЬ ЗАКАЗ🛍")
-async def make_order(message: types.Message):
-    await ()
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    id = str(message.chat.id)
+    try:
+        os.rmdir(f"users/{id}")
+    except Exception:
+        pass
+    try:
+        os.mkdir(f"users/{id}")
+    except Exception:
+        pass
+
+    await bot.send_message(message.chat.id, "Скиньте скрин товара", reply_markup=keyboard)
+    await state.set_state(Order.scrin)
+
+
+@dp.message(Order.scrin)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    if message.photo:
+        file_name = f"users/{message.chat.id}/order_photo.png"
+        await bot.download(message.photo[-1], destination=file_name)
+        await bot.send_message(message.chat.id, "Введите ссылку на товар", reply_markup=keyboard)
+        await state.set_state(Order.link)
+
+
+@dp.message(Order.link)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/order.txt', "w") as file:
+            file.truncate(0)
+            file.write(f"Ссылка на товар: {message.text}\n")
+    except Exception:
+        pass
+    await bot.send_message(message.chat.id, "Введите адрес, куда необходимо доставить товар",
+                           reply_markup=keyboard)
+    await state.set_state(Order.adress)
+
+
+@dp.message(Order.adress)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/order.txt', "a") as file:
+            file.write(f"Адрес доставки: {message.text}\n")
+    except Exception:
+        pass
+    await bot.send_message(message.chat.id, "Введите ваше ФИО",
+                           reply_markup=keyboard)
+    await state.set_state(Order.name)
+
+
+@dp.message(Order.name)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/order.txt', "a") as file:
+            file.write(f"ФИО: {message.text}\n")
+    except Exception:
+        pass
+    await bot.send_message(message.chat.id, "Введите ваш номер телефона",
+                           reply_markup=keyboard)
+    await state.set_state(Order.phone_number)
+
+
+@dp.message(Order.phone_number)
+async def make_order(message: types.Message, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=KEYBOARD_BACK,
+        resize_keyboard=True
+    )
+    try:
+        with open(f'users/{message.chat.id}/order.txt', "a") as file:
+            file.write(f"Номер  телефона: {message.text}\n")
+    except Exception:
+        pass
+    photo = FSInputFile(f'users/{message.chat.id}/order_photo.png', filename=os.path.basename("order_photo.png"))
+    await bot.send_photo(message.chat.id, photo=photo)
+    order_text = ""
+    with open(f'users/{message.chat.id}/order.txt', 'r') as file:
+        order_text = file.read()
+    await bot.send_message(message.chat.id, order_text)
+    await bot.send_message(message.chat.id,
+                           "Ваша заявка сформирована и отправлена! Чтобы вернуться назад, нажите на кнопку ниже",
+                           reply_markup=keyboard)
+    await state.clear()
+
 
 async def main():
     await dp.start_polling(bot)
