@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types.input_file import FSInputFile
-from config import TOKEN
+from config import TOKEN, CHANNEL_ID
 import asyncio
 import os
 from valute_translator import get_course_cny, get_course_rub
@@ -40,10 +40,9 @@ class Order(StatesGroup):
 
 
 KEYBOARD_START = [
-    [types.KeyboardButton(text="ОФОРМИТЬ ЗАКАЗ🛍")],
-    [types.KeyboardButton(text="ПЕРЕВЕСТИ ЮАНИ В РУБЛИ💴")],
-    [types.KeyboardButton(text="ПЕРЕВЕСТИ РУБЛИ В ЮАНИ💴")],
-    [types.KeyboardButton(text="ПОМОЩЬ")],
+    [types.KeyboardButton(text="ОФОРМИТЬ ЗАКАЗ🛍"), types.KeyboardButton(text="СОЗДАТЬ СЕРТИФИКАТ🎁")],
+    [types.KeyboardButton(text="ПЕРЕВЕСТИ ЮАНИ В РУБЛИ💴"), types.KeyboardButton(text="ПЕРЕВЕСТИ РУБЛИ В ЮАНИ💴")],
+    [types.KeyboardButton(text="НАЦЕНКА ЗА ДОСТАВКУ🚚")],
 ]
 
 KEYBOARD_BACK = [
@@ -156,7 +155,10 @@ async def make_order(message: types.Message, state: FSMContext):
     except Exception:
         pass
 
-    await bot.send_message(message.chat.id, "Скиньте скрин товара", reply_markup=keyboard)
+    photo = FSInputFile(f'example_scrin.jpg', filename=os.path.basename("example_scrin.jpg"))
+    await bot.send_photo(message.chat.id, photo=photo)
+    await bot.send_message(message.chat.id, "Пожалуйста, вставьте фото товара, как показано на примере 🙌",
+                           reply_markup=keyboard)
     await state.set_state(Order.scrin)
 
 
@@ -169,7 +171,12 @@ async def make_order(message: types.Message, state: FSMContext):
     if message.photo:
         file_name = f"users/{message.chat.id}/order_photo.png"
         await bot.download(message.photo[-1], destination=file_name)
-        await bot.send_message(message.chat.id, "Введите ссылку на товар", reply_markup=keyboard)
+
+        photo = FSInputFile(f'example_link.jpg', filename=os.path.basename("example_link.jpg"))
+        await bot.send_photo(message.chat.id, photo=photo)
+        await bot.send_message(message.chat.id,
+                               "Пожалуйста, отправьте ссылку на товар, взяв ее также, как показано на примере 📦",
+                               reply_markup=keyboard)
         await state.set_state(Order.link)
 
 
@@ -185,7 +192,7 @@ async def make_order(message: types.Message, state: FSMContext):
             file.write(f"Ссылка на товар: {message.text}\n")
     except Exception:
         pass
-    await bot.send_message(message.chat.id, "Введите адрес, куда необходимо доставить товар",
+    await bot.send_message(message.chat.id, "Напишите, пожалуйста, адрес доставки товара 🏠",
                            reply_markup=keyboard)
     await state.set_state(Order.adress)
 
@@ -201,7 +208,7 @@ async def make_order(message: types.Message, state: FSMContext):
             file.write(f"Адрес доставки: {message.text}\n")
     except Exception:
         pass
-    await bot.send_message(message.chat.id, "Введите ваше ФИО",
+    await bot.send_message(message.chat.id, "Введите Ваше ФИО 🖋️",
                            reply_markup=keyboard)
     await state.set_state(Order.name)
 
@@ -217,7 +224,7 @@ async def make_order(message: types.Message, state: FSMContext):
             file.write(f"ФИО: {message.text}\n")
     except Exception:
         pass
-    await bot.send_message(message.chat.id, "Введите ваш номер телефона",
+    await bot.send_message(message.chat.id, "Введите ваш номер телефона 📱",
                            reply_markup=keyboard)
     await state.set_state(Order.phone_number)
 
@@ -231,16 +238,23 @@ async def make_order(message: types.Message, state: FSMContext):
     try:
         with open(f'users/{message.chat.id}/order.txt', "a") as file:
             file.write(f"Номер  телефона: {message.text}\n")
+            try:
+                file.write(f"Тг пользователя: @{message.from_user.username}\n")
+            except Exception:
+                file.write("Тг пользователя не указано в приложении")
     except Exception:
         pass
     photo = FSInputFile(f'users/{message.chat.id}/order_photo.png', filename=os.path.basename("order_photo.png"))
     await bot.send_photo(message.chat.id, photo=photo)
+    await bot.send_photo(CHANNEL_ID, photo=photo)
     order_text = ""
     with open(f'users/{message.chat.id}/order.txt', 'r') as file:
         order_text = file.read()
+    await bot.send_message(CHANNEL_ID, order_text)
     await bot.send_message(message.chat.id, order_text)
+
     await bot.send_message(message.chat.id,
-                           "Ваша заявка сформирована и отправлена! Чтобы вернуться назад, нажите на кнопку ниже",
+                           "Ваша заявка сформирована и отправлена! Чтобы вернуться назад, нажмите на кнопку ниже",
                            reply_markup=keyboard)
     await state.clear()
 

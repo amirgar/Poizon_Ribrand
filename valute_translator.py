@@ -6,7 +6,7 @@ from config import COURSE_TOKEN
 from bs4 import BeautifulSoup
 
 
-def get_course_cny(n):
+def get_course_rub(n):
     current_date = str(datetime.date.today().isoformat())
     rates = ExchangeRates(current_date)  # задаем дату, за которую хотим получить данные
     result = rates['CNY']
@@ -38,7 +38,7 @@ def get_exchange_rate():
         return None
 
 
-def get_course_rub(n):
+def get_course_cny(n):
     exchange_rate = get_exchange_rate()
     if exchange_rate is not None:
         amount_cny = n * (exchange_rate + 2)
