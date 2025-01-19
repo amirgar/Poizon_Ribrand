@@ -41,7 +41,7 @@ def get_exchange_rate():
 def get_course_rub(n):
     exchange_rate = get_exchange_rate()
     if exchange_rate is not None:
-        amount_cny = n * exchange_rate
+        amount_cny = n * (exchange_rate + 2)
         return ceil(amount_cny)
     else:
         return None
